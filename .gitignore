@@ -1,0 +1,10 @@
+node_modules/
+dist/
+reports/
+coverage/
+.amikoo-wdio-results/
+*.tgz
+.env
+.env.*
+!.env.example
+*.log

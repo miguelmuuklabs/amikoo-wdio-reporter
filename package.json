@@ -1,0 +1,30 @@
+{
+  "name": "amikoo-wdio-reporter",
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@wdio/reporter": "^9.32.0",
+    "@wdio/types": "^9.32.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "peerDependencies": {
+    "@wdio/reporter": "^9.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}
