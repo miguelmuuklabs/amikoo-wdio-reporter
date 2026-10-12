@@ -107,6 +107,68 @@ npm install --save-dev ./amikoo-wdio-reporter-0.1.0.tgz
 
 The package is currently distributed internally and is not published to the public npm registry.
 
+## Environment Variables
+
+The Amikoo reporter requires a valid API key to authenticate requests to the Amikoo API.
+
+The API key must be configured in the **WebdriverIO project that consumes the package**, not in the reporter's source code.
+
+### Local Configuration
+
+Create a `.env` file in the root directory of your WebdriverIO project:
+
+```env
+AMIKOO_KEY=your_amiko_api_key
+```
+
+If your project uses `dotenv`, install it:
+
+```bash
+npm install dotenv
+```
+
+Then load the environment variables at the beginning of `wdio.conf.ts`:
+
+```typescript
+import 'dotenv/config';
+```
+
+The reporter can then access the API key using:
+
+```typescript
+apiKey: process.env.AMIKOO_KEY
+```
+
+Alternatively, you can provide `AMIKOO_KEY` directly through your operating system's environment variables without using a `.env` file.
+
+### GitHub Actions Configuration
+
+For CI/CD executions, configure the API key as a GitHub Actions repository secret:
+
+1. Open the consuming project's GitHub repository.
+2. Navigate to **Settings → Secrets and variables → Actions**.
+3. Create a new repository secret named `AMIKOO_KEY`.
+4. Reference the secret in your workflow:
+
+```yaml
+env:
+  AMIKOO_KEY: ${{ secrets.AMIKOO_KEY }}
+```
+
+### Security
+
+Never commit actual API keys to source control.
+
+Ensure `.env` is included in the consuming project's `.gitignore`:
+
+```gitignore
+.env
+.env.*
+!.env.example
+```
+
+The reporter uses the configured API key to authenticate requests to Amikoo. Each consuming project is responsible for providing its own credentials.
+
 ## Configuration
 
 Set the `AMIKOO_KEY` environment variable securely.
