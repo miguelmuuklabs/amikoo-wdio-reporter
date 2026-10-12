@@ -22,6 +22,81 @@ The reporter captures test results, consolidates results from multiple Webdriver
 - A valid Amikoo API key
 - Access to the Amikoo API
 
+## Compatible Project Structure
+
+The reporter can be integrated into an existing WebdriverIO 9 project. It does not require a specific folder structure or changes to existing test cases.
+
+A typical WebdriverIO + Appium project might look like this:
+
+```text
+mobile-qa-automation/
+├── tests/
+│   └── specs/
+│       ├── login.spec.ts
+│       └── checkout.spec.ts
+├── wdio.conf.ts
+├── package.json
+├── package-lock.json
+├── .env
+├── .gitignore
+└── README.md
+```
+
+The `amikoo-wdio-reporter` package is installed as a development dependency and imported into `wdio.conf.ts`.
+
+There is no need to copy the reporter source code into the consuming project.
+
+## Integration Architecture
+
+The reporter operates within the existing WebdriverIO execution lifecycle:
+
+```text
+WebdriverIO Test Runner
+        |
+        v
+Appium / Browser Automation
+        |
+        v
+Amikoo WebdriverIO Reporter
+        |
+        v
+Per-Worker JSON Results
+        |
+        v
+Result Aggregation (onComplete)
+        |
+        v
+Amikoo API
+        |
+        v
+Single Consolidated Execution
+```
+
+**Execution lifecycle:**
+
+1. `onPrepare` initializes the temporary results directory.
+2. WebdriverIO executes the configured test specifications.
+3. Each worker collects test results through the custom reporter.
+4. Worker results are written to `.amikoo-wdio-results`.
+5. `onComplete` aggregates the results after execution.
+6. The consolidated execution is submitted to the Amikoo API.
+
+## Integration into Existing Projects
+
+The package is designed to work with existing WebdriverIO projects without replacing their test suites, Page Objects, capabilities, or existing reporters.
+
+To integrate it:
+
+1. Install the package as a development dependency.
+2. Configure the Amikoo API key.
+3. Register `AmikooReporter` in the `reporters` array.
+4. Call `prepareAmikooRun()` from `onPrepare`.
+5. Call `submitAmikooRun()` from `onComplete`.
+
+If the project already has lifecycle hooks, preserve their existing behavior and add the Amikoo calls to those hooks.
+
+**Important:** The package is a reporting integration, not a complete test automation framework. WebdriverIO remains responsible for running tests, while Appium handles mobile device automation when applicable.
+
 ## Installation
 
 Install the internally distributed package:
