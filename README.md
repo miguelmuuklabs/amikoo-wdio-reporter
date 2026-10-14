@@ -13,6 +13,16 @@ The reporter captures test results, consolidates results from multiple Webdriver
 - Multi-worker result aggregation
 - Single execution submission to Amikoo
 - Support for local and CI/CD execution
+- HTTP request timeout of 15 seconds
+- Automatic retries for transient authentication and repository lookup failures
+- Exponential retry delays (1s and 2s, maximum 3 attempts)
+- HTTP and network error handling
+- Protection against automatic execution resubmission
+- Preservation of worker JSON results when submission fails
+- Validation of API submission confirmation and processed test count
+- Protection against overwriting pending results
+- Detailed execution diagnostics
+- Automated build and unit test validation with GitHub Actions
 
 ## Requirements
 
@@ -102,7 +112,7 @@ If the project already has lifecycle hooks, preserve their existing behavior and
 Install the internally distributed package:
 
 ```bash
-npm install --save-dev ./amikoo-wdio-reporter-0.1.0.tgz
+npm install --save-dev ./amikoo-wdio-reporter-0.2.0.tgz
 ```
 
 The package is currently distributed internally and is not published to the public npm registry.
@@ -221,9 +231,15 @@ Each worker writes its test results to a temporary directory. After all workers 
 Example console output:
 
 ```text
-[Amikoo] Worker results collected: 1
+[Amikoo] Worker results collected: 5
+[Amikoo] Repository: qa-agentic-lab/virtualshop-mobile-qa
+[Amikoo] Branch: main
+[Amikoo] Workers collected: 1
 [Amikoo] Total tests collected: 5
-[Amikoo] Consolidated execution submitted: {"success":true,"data":{"testsProcessed":5,"failedTestCount":3}}
+[Amikoo] Results summary: 2 PASS, 3 FAIL.
+[Amikoo] Submitting consolidated execution...
+[Amikoo] Consolidated execution confirmed: {"success":true,"data":{"testsProcessed":5,"failedTestCount":3}}
+[Amikoo] Temporary results cleaned successfully.
 ```
 
 ## Configuration Options
@@ -252,12 +268,62 @@ The integration was successfully validated on October 12, 2026, using WebdriverI
 
 All five results were successfully processed in one consolidated submission.
 
+## Reliability and Error Handling
+
+Version 0.2.0 introduces additional reliability safeguards.
+
+### HTTP Requests
+
+- Requests have a configured timeout of 15 seconds.
+- Authentication and repository lookup requests can retry transient failures.
+- Retryable HTTP statuses include 429, 500, 502, 503, and 504.
+- Network failures and timeout errors can trigger retries on permitted endpoints.
+- A maximum of 3 attempts is allowed, with exponential delays of 1 and 2 seconds.
+
+### Duplicate Submission Protection
+
+The reporter does not automatically retry:
+
+- `/execution/execution_number`
+- `/execution/feedback`
+
+This reduces the risk of creating duplicate executions when the API processes a request but its response is lost.
+
+This is not a guarantee of server-side idempotency.
+
+### Result Preservation
+
+If submission fails or Amikoo does not confirm success, the reporter preserves the worker JSON files in:
+
+`.amikoo-wdio-results`
+
+The reporter also checks the number of processed tests when the API provides `testsProcessed`.
+
+A new execution will not initialize while pending JSON files remain in the results directory.
+
+Pending files must be reviewed manually before starting another execution. Do not resubmit them without checking whether Amikoo already processed the previous request.
+
+### Diagnostics
+
+The reporter logs:
+
+- Repository and branch
+- Number of worker result files
+- Total collected tests
+- PASS and FAIL counts
+- Submission confirmation or error details
+- Location of preserved results when submission fails
+
 ## Known Limitations
 
 - Aggregation uses the shared `.amikoo-wdio-results` directory.
 - Concurrent suites running from the same working directory are not supported.
 - Manual integration with WebdriverIO lifecycle hooks is currently required.
 - The reporter collects and submits results; it does not generate or execute test cases.
+- Pending result files require manual review and recovery.
+- Automatic resubmission is intentionally disabled for execution submission.
+- Server-side idempotency is not guaranteed.
+- Concurrent runs sharing the same results directory are not supported.
 - API access is required to submit results.
 
 ## Security Considerations
@@ -301,8 +367,23 @@ npm pack
 
 ## Project Status
 
-**Version 0.1.0 — Validated proof of concept**
+**Version 0.2.0 — Reliability improvements**
 
-Successfully tested with WebdriverIO, Appium Android, and the Amikoo API.
+Build and unit test validation completed successfully.
 
-Intended for internal evaluation and further adoption review.
+- 16 unit tests passing
+- HTTP retry and error handling implemented
+- Timeout error handling validated with mocked requests
+- Multi-worker aggregation validated
+- Failed submission result preservation validated
+- GitHub Actions CI workflow configured
+
+**Previous validation — Version 0.1.0**
+
+Successfully validated against the real Amikoo API on October 12, 2026.
+
+Amikoo execution #21 processed five Android test results in a single consolidated execution.
+
+**Version 0.2.0 real integration validation is pending.**
+
+The package remains intended for internal evaluation.

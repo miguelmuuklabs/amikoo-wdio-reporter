@@ -13,11 +13,35 @@ const RESULTS_DIR = path.join(
     '.amikoo-wdio-results'
 );
 
+interface AmikooSubmissionResponse {
+    success?: boolean;
+    data?: {
+        testsProcessed?: number;
+        failedTestCount?: number;
+    };
+}
+
+function log(message: string): void {
+    console.log(`[Amikoo] ${message}`);
+}
+
+function logError(message: string): void {
+    console.error(`[Amikoo] ${message}`);
+}
+
 export function prepareAmikooRun(): void {
-    fs.rmSync(RESULTS_DIR, {
-        recursive: true,
-        force: true
-    });
+    if (fs.existsSync(RESULTS_DIR)) {
+        const pendingFiles = fs.readdirSync(RESULTS_DIR)
+            .filter(file => file.endsWith('.json'));
+
+        if (pendingFiles.length > 0) {
+            throw new Error(
+                `[Amikoo] Found ${pendingFiles.length} pending result file(s). ` +
+                'Previous results will not be deleted. ' +
+                'Review them before starting a new execution.'
+            );
+        }
+    }
 
     fs.mkdirSync(RESULTS_DIR, {
         recursive: true
@@ -30,6 +54,7 @@ export async function submitAmikooRun(
     options: AmikooReporterOptions
 ): Promise<void> {
     if (options.enabled === false) {
+        log('Reporter disabled. Submission skipped.');
         return;
     }
 
@@ -44,55 +69,139 @@ export async function submitAmikooRun(
         'main';
 
     if (!repository) {
-        throw new Error('[Amikoo] Repository not configured.');
+        throw new Error(
+            '[Amikoo] Repository not configured.'
+        );
     }
 
     if (!fs.existsSync(RESULTS_DIR)) {
-        throw new Error('[Amikoo] Results directory not found.');
+        throw new Error(
+            '[Amikoo] Results directory not found.'
+        );
     }
 
     const files = fs.readdirSync(RESULTS_DIR)
-        .filter(file => file.endsWith('.json'));
+        .filter(file => file.endsWith('.json'))
+        .sort();
 
     const tests: AmikooTestResult[] = [];
 
     for (const file of files) {
-        const content = fs.readFileSync(
-            path.join(RESULTS_DIR, file),
-            'utf8'
-        );
+        const filePath = path.join(RESULTS_DIR, file);
 
-        const workerTests = JSON.parse(content) as AmikooTestResult[];
+        let workerTests: unknown;
 
-        if (!Array.isArray(workerTests)) {
-            throw new Error(`[Amikoo] Invalid results file: ${file}`);
+        try {
+            const content = fs.readFileSync(
+                filePath,
+                'utf8'
+            );
+
+            workerTests = JSON.parse(content);
+        } catch (error) {
+            const reason =
+                error instanceof Error
+                    ? error.message
+                    : String(error);
+
+            throw new Error(
+                `[Amikoo] Unable to read results file "${file}": ${reason}`
+            );
         }
 
-        tests.push(...workerTests);
+        if (!Array.isArray(workerTests)) {
+            throw new Error(
+                `[Amikoo] Invalid results file: ${file}. Expected an array.`
+            );
+        }
+
+        tests.push(
+            ...(workerTests as AmikooTestResult[])
+        );
+
+        log(
+            `Loaded ${workerTests.length} result(s) from ${file}.`
+        );
     }
 
-    console.log(`[Amikoo] Total tests collected: ${tests.length}`);
+    log(`Repository: ${repository}`);
+    log(`Branch: ${branch}`);
+    log(`Workers collected: ${files.length}`);
+    log(`Total tests collected: ${tests.length}`);
 
     if (!tests.length) {
-        console.log('[Amikoo] No tests to submit.');
+        log('No tests to submit.');
         return;
     }
 
-    const client = new AmikooApiClient(options);
+    const passed = tests.filter(
+        test => test.result === true
+    ).length;
 
-    const response = await client.sendResults(
-        tests,
-        repository,
-        branch
+    const failed = tests.filter(
+        test => test.result === false
+    ).length;
+
+    log(
+        `Results summary: ${passed} PASS, ${failed} FAIL.`
     );
 
-    console.log(
-        '[Amikoo] Consolidated execution submitted:',
-        JSON.stringify(response)
-    );
+    try {
+        const client = new AmikooApiClient(options);
 
-    fs.rmSync(RESULTS_DIR, {
-        recursive: true,
-        force: true
-    });
+        log('Submitting consolidated execution...');
+
+        const response = await client.sendResults(
+            tests,
+            repository,
+            branch
+        ) as AmikooSubmissionResponse;
+
+        if (response?.success !== true) {
+            throw new Error(
+                'Amikoo did not confirm a successful submission.'
+            );
+        }
+
+        const processed = response.data?.testsProcessed;
+
+        if (
+            typeof processed === 'number' &&
+            processed !== tests.length
+        ) {
+            throw new Error(
+                `Amikoo reported ${processed} processed tests, ` +
+                `but ${tests.length} were submitted.`
+            );
+        }
+
+        log(
+            'Consolidated execution confirmed: ' +
+            JSON.stringify(response)
+        );
+
+        fs.rmSync(RESULTS_DIR, {
+            recursive: true,
+            force: true
+        });
+
+        log('Temporary results cleaned successfully.');
+    } catch (error) {
+        const reason =
+            error instanceof Error
+                ? error.message
+                : String(error);
+
+        logError(`Submission failed: ${reason}`);
+
+        logError(
+            'Results preserved at: ' + RESULTS_DIR
+        );
+
+        logError(
+            'Automatic resubmission is disabled to avoid duplicate executions.'
+        );
+
+        throw error;
+    }
 }
