@@ -142,6 +142,12 @@ describe('Amikoo WDIO Reporter', () => {
     });
 
     it('should consolidate multiple workers into one submission', async () => {
+
+        sendResultsMock.mockResolvedValue({
+            success: true,
+            data: { testsProcessed: 2 }
+        });
+
         const reporter1 = createReporter();
         const reporter2 = createReporter();
 
@@ -203,5 +209,102 @@ describe('Amikoo WDIO Reporter', () => {
         });
 
         expect(sendResultsMock).not.toHaveBeenCalled();
+    });
+
+        it('should preserve JSON results when API submission fails', async () => {
+        sendResultsMock.mockRejectedValue(
+            new Error('Network connection failed')
+        );
+
+        const reporter = createReporter();
+
+        reporter.onTestPass({
+            title: 'network failure test',
+            fullTitle: 'Suite network failure test',
+            file: 'network.spec.ts',
+            duration: 1000
+        });
+
+        reporter.onRunnerEnd();
+
+        await expect(
+            submitAmikooRun(options)
+        ).rejects.toThrow('Network connection failed');
+
+        expect(sendResultsMock).toHaveBeenCalledOnce();
+        expect(fs.readdirSync(resultsDir)).toHaveLength(1);
+    });
+
+    it('should preserve JSON results when Amikoo returns success false', async () => {
+        sendResultsMock.mockResolvedValue({
+            success: false,
+            message: 'Submission rejected'
+        });
+
+        const reporter = createReporter();
+
+        reporter.onTestPass({
+            title: 'rejected submission',
+            fullTitle: 'Suite rejected submission',
+            file: 'rejected.spec.ts',
+            duration: 1000
+        });
+
+        reporter.onRunnerEnd();
+
+        await expect(
+            submitAmikooRun(options)
+        ).rejects.toThrow(
+            'Amikoo did not confirm a successful submission'
+        );
+
+        expect(sendResultsMock).toHaveBeenCalledOnce();
+        expect(fs.readdirSync(resultsDir)).toHaveLength(1);
+    });
+
+    it('should preserve JSON results when processed count does not match', async () => {
+        sendResultsMock.mockResolvedValue({
+            success: true,
+            data: { testsProcessed: 0 }
+        });
+
+        const reporter = createReporter();
+
+        reporter.onTestPass({
+            title: 'count mismatch',
+            fullTitle: 'Suite count mismatch',
+            file: 'mismatch.spec.ts',
+            duration: 1000
+        });
+
+        reporter.onRunnerEnd();
+
+        await expect(
+            submitAmikooRun(options)
+        ).rejects.toThrow(
+            'Amikoo reported 0 processed tests, but 1 were submitted'
+        );
+
+        expect(sendResultsMock).toHaveBeenCalledOnce();
+        expect(fs.readdirSync(resultsDir)).toHaveLength(1);
+    });
+
+    it('should reject invalid JSON without submitting results', async () => {
+        fs.writeFileSync(
+            path.join(resultsDir, 'invalid.json'),
+            '{invalid-json',
+            'utf8'
+        );
+
+        await expect(
+            submitAmikooRun(options)
+        ).rejects.toThrow(
+            'Unable to read results file "invalid.json"'
+        );
+
+        expect(sendResultsMock).not.toHaveBeenCalled();
+        expect(fs.existsSync(
+            path.join(resultsDir, 'invalid.json')
+        )).toBe(true);
     });
 });

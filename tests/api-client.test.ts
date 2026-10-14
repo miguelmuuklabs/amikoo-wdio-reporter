@@ -220,6 +220,37 @@ describe('Amikoo API Client', () => {
         expect(globalThis.fetch).toHaveBeenCalledTimes(3);
     });
 
+        it('does not retry execution feedback when request times out', async () => {
+        globalThis.fetch = vi.fn()
+            .mockResolvedValueOnce(authenticationResponse())
+            .mockResolvedValueOnce(repositoryResponse())
+            .mockResolvedValueOnce(executionResponse())
+            .mockRejectedValueOnce(
+                new DOMException(
+                    'The operation was aborted due to timeout',
+                    'TimeoutError'
+                )
+            );
+
+        await expect(
+            createClient().sendResults(
+                [test],
+                repository,
+                'main'
+            )
+        ).rejects.toThrow('The operation was aborted due to timeout');
+
+        expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+
+        const calls = vi.mocked(globalThis.fetch).mock.calls;
+
+        const feedbackCalls = calls.filter(
+            call => String(call[0]).includes('/execution/feedback')
+        );
+
+        expect(feedbackCalls).toHaveLength(1);
+    });
+
     it('rejects invalid repository formats before making requests', async () => {
         await expect(
             createClient().sendResults(
