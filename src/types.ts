@@ -1,10 +1,21 @@
-
 export interface AmikooReporterOptions {
     apiKey?: string;
     baseUrl?: string;
     repository?: string;
     branch?: string;
     enabled?: boolean;
+    videoEvidence?: {
+        enabled: boolean;
+        bucket: string;
+        region: string;
+    };
+}
+
+export interface AmikooVideoEvidence {
+    bucket: string;
+    region: string;
+    key: string;
+    s3Uri: string;
 }
 
 export interface AmikooTestResult {
@@ -14,9 +25,13 @@ export interface AmikooTestResult {
     duration: number;
     executionAt: string;
     result: boolean;
+    testRunId?: string;
     error: {
         message?: string;
         stack?: string;
+    };
+    evidence?: {
+        video?: AmikooVideoEvidence;
     };
 }
 
@@ -26,3 +41,4 @@ export interface AmikooReport {
     platform: 'Android';
     tests: AmikooTestResult[];
 }
+
