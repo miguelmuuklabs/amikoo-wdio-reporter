@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { attachVideoEvidence } from './evidence-aggregation.js';
 
 import { AmikooApiClient } from './api-client.js';
 
@@ -145,6 +146,31 @@ export async function submitAmikooRun(
     log(
         `Results summary: ${passed} PASS, ${failed} FAIL.`
     );
+
+    const enrichedTests = attachVideoEvidence(tests);
+
+    const reportPath = path.join(
+        process.cwd(),
+        'reports',
+        'amikoo-consolidated.json'
+    );
+
+    fs.mkdirSync(path.dirname(reportPath), {
+        recursive: true
+    });
+
+    fs.writeFileSync(
+        reportPath,
+        JSON.stringify({
+            framework: 'WebdriverIO',
+            automation: 'Appium',
+            platform: 'Android',
+            tests: enrichedTests
+        }, null, 2),
+        'utf8'
+    );
+
+    log(`Consolidated report saved: ${reportPath}`);
 
     try {
         const client = new AmikooApiClient(options);

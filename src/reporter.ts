@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+import { getTestRunId } from './test-run-id.js';
+
 import type {
     AmikooReporterOptions,
     AmikooTestResult
@@ -36,13 +38,26 @@ export default class AmikooReporter extends WDIOReporter {
     }
 
     onTestSkip(test: any): void {
-        console.log(`[Amikoo] Skipped: ${test.title}`);
+        console.log(
+            `[Amikoo] Skipped: ${test.title}`
+        );
     }
 
-    private recordTest(test: any, passed: boolean): void {
+    private recordTest(
+        test: any,
+        passed: boolean
+    ): void {
+        const filePath =
+            test.file ||
+            test.parent?.file ||
+            'unknown';
+
+        const testRunId = getTestRunId();
+
         this.amikooResults.push({
+            testRunId,
             name: test.title,
-            filePath: test.file || 'unknown',
+            filePath,
             fullTitle: test.fullTitle || test.title,
             duration: (test.duration || 0) / 1000,
             executionAt: new Date().toISOString(),
@@ -54,6 +69,11 @@ export default class AmikooReporter extends WDIOReporter {
                     stack: test.error?.stack
                 }
         });
+
+        console.log(
+            `[Amikoo] Test recorded: ${test.title} | ` +
+            `TestRunId: ${testRunId ?? 'unavailable'}`
+        );
     }
 
     onRunnerEnd(): void {
@@ -70,9 +90,12 @@ export default class AmikooReporter extends WDIOReporter {
                 '.amikoo-wdio-results'
             );
 
-            fs.mkdirSync(directory, { recursive: true });
+            fs.mkdirSync(directory, {
+                recursive: true
+            });
 
-            const filename = `${process.pid}-${crypto.randomUUID()}.json`;
+            const filename =
+                `${process.pid}-${crypto.randomUUID()}.json`;
 
             fs.writeFileSync(
                 path.join(directory, filename),
@@ -81,10 +104,15 @@ export default class AmikooReporter extends WDIOReporter {
             );
 
             console.log(
-                `[Amikoo] Worker results collected: ${this.amikooResults.length}`
+                `[Amikoo] Worker results collected: ` +
+                `${this.amikooResults.length}`
             );
         } catch (error) {
-            console.error('[Amikoo] Failed to save worker results:', error);
+            console.error(
+                '[Amikoo] Failed to save worker results:',
+                error
+            );
         }
     }
 }
+
